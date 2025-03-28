@@ -3,6 +3,12 @@ const puppeteer = require('puppeteer');
 const cron = require('node-cron');
 const settings = require('./settings.json');
 
+// URL
+const targetUrl = "https://workflow.cuc.edu.cn/reservation/fe/site/reservationInfo?id=1293";
+const key = settings.time;
+// 读取cookie路径
+const COOKIES_PATH = settings.COOKIES_PATH;
+
 // 保存cookies到文件
 async function saveCookies(page) {
   const cookies = await page.cookies();
@@ -17,22 +23,6 @@ async function loadCookies(page) {
   }
 }
 
-// URL
-const targetUrl = "https://workflow.cuc.edu.cn/reservation/fe/site/reservationInfo?id=1293";
-
-// 预约时间对应 element 顺序
-const timeList = {
-  "15:00-16:00": 0,
-  "16:00-17:00": 1,
-  "17:00-18:00": 2,
-  "18:00-19:00": 3,
-  "19:00-20:00": 4,
-  "20:00-21:00": 5
-};
-
-const key = settings.time;
-// 读取cookie路径
-const COOKIES_PATH = settings.COOKIES_PATH;
 async function main() {
   // 启动浏览器
   const browser = await puppeteer.launch({ headless: false, devtools: true }); // headless: false 表示显示浏览器界面
@@ -90,63 +80,69 @@ async function main() {
   // 获取确认按钮
   const button = await page.$('.confirm_bt');
 
-  const isSuccess = await page.evaluate((key, timeList) => {
-    // 获取场地列表
-    const siteList = document.querySelectorAll('.left_venues dd');
-    // 获取时间段表项(没有动态加载可以不等切换场地后再更新)
-    const timeDivs = document.querySelectorAll('.item_content_box');
-    // 倒序遍历场地
-    for (let i = 9; i >= 0; i--) {
-      siteList[i].click();
+  for (let i = 0; i <= 9; i++) {
+    // 选择结束
+    if (key.length ==0) break;
+    await page.evaluate((i) => {
+      // 切换场地
+      document.querySelectorAll('.left_venues dd')[i].click();
       console.log("羽毛球", i + 1, "已选择！");
-      // 选择结束
-      if (!key.length) break;
-      if (key.length === 1) {
-        const temp = timeDivs[timeList[key[0]]];
-        if (temp.classList.contains('green')) {
-          temp.click();
-          key.shift();
-          console.log("选择时间段成功！");
-        } else {
-          console.log("当前场地此时间段不可选");
-        }
+    }, i);
+    // 等待有更新的可选元素
+    try {
+      await page.waitForSelector('.can_active', { timeout: 1000 });
+    } catch (error) {
+      if (error.name === 'TimeoutError') {
+        console.warn('超时未找到 .can_active，继续执行');
       } else {
-        // 并行选择
-        const temp1 = timeDivs[timeList[key[0]]];
-        const temp2 = timeDivs[timeList[key[1]]];
-        if (temp1.classList.contains('green')) {
-          temp1.click();
-          key.shift();
-          console.log("选择时间段1成功！");
-        } else {
-          console.log("当前场地此时间段1不可选");
-        }
-        if(temp2.classList.contains('green')) {
-          temp1.click();
-          key.slice(0, -1);
-          console.log("选择时间段2成功！");
-        } else {
-          console.log("当前场地此时间段2不可选");
-        }
+        throw error; // 其他错误正常抛出
       }
     }
-    return (key.length == 0 ? 1 : 0);
-  }, key, timeList);
-  // 判断是否成功选择
-  if (isSuccess) {
-    await button.click();
-    console.log("预约已提交！");
-  } else {
-    console.log("无可预约时段！预约失败！");
+    // 获取更新后元素
+    await page.evaluate((key) => {
+      const clickTimeDivs = document.querySelectorAll('.item_content_box.can_active');
+      if(!clickTimeDivs) return
+      if(key.length === 1) {
+        clickTimeDivs.forEach((node) => {
+          // 获取可选时段div对应时间
+          const timeTemp = node.querySelector('.reservation_name').textContent
+          if(timeTemp == key[0]) {
+            node.click();
+            key.shift();
+            console.log("选择时间段成功！");
+          }
+        })
+      } else if (key.length == 2) {
+        clickTimeDivs.forEach((node) => {
+          const timeTemp = node.querySelector('.reservation_name').textContent
+          switch (timeTemp){
+            case key[0]:
+              node.click();
+              key.shift();
+              console.log("选择时间段1成功！");
+              break;
+            case key[1]:
+              node.click();
+              key.slice(0, -1);
+              console.log("选择时间段2成功！");
+              break;
+          }})
+      }
+    }, key);
   }
 
-  // 关闭浏览器
-  // await browser.close();
-}
+  await button.click();
+  console.log("预约已提交！");
 
+  // 关闭浏览器
+  await browser.close();
+}
+// 定时运行
 cron.schedule('0 8 * * *', () => {
   console.log('定时任务启动，开始执行预约...');
   main().catch(err => {
     console.error('执行过程中出错:', err);
   });
 });
+
+// main();
