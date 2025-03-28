@@ -90,7 +90,7 @@ async function main() {
     }, i);
     // 等待有更新的可选元素
     try {
-      await page.waitForSelector('.can_active', { timeout: 1000 });
+      await page.waitForSelector('.can_active', { timeout: 200 });
     } catch (error) {
       if (error.name === 'TimeoutError') {
         console.warn('超时未找到 .can_active，继续执行');
