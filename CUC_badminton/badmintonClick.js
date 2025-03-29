@@ -5,7 +5,6 @@ const settings = require('./settings.json');
 
 // URL
 const targetUrl = "https://workflow.cuc.edu.cn/reservation/fe/site/reservationInfo?id=1293";
-const key = settings.time;
 // 读取cookie路径
 const COOKIES_PATH = settings.COOKIES_PATH;
 
@@ -79,6 +78,7 @@ async function main() {
 
   // 获取确认按钮
   const button = await page.$('.confirm_bt');
+  let key = settings.time;
 
   for (let i = 0; i <= 9; i++) {
     // 选择结束
@@ -99,9 +99,9 @@ async function main() {
       }
     }
     // 获取更新后元素
-    await page.evaluate((key) => {
+    key = await page.evaluate((key) => {
       const clickTimeDivs = document.querySelectorAll('.item_content_box.can_active');
-      if(!clickTimeDivs) return
+      if(!clickTimeDivs) return key;
       if(key.length === 1) {
         clickTimeDivs.forEach((node) => {
           // 获取可选时段div对应时间
@@ -128,6 +128,7 @@ async function main() {
               break;
           }})
       }
+      return key;
     }, key);
   }
 
