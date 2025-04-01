@@ -78,16 +78,24 @@ async function main() {
 
   // 获取确认按钮
   const button = await page.$('.confirm_bt');
-  let key = settings.time;
 
-  for (let i = 0; i <= 9; i++) {
+  let key = settings.time;
+  
+  // 创建0-9的数组并随机打乱，用于随机遍历球场
+  const courtOrder = Array.from({length: 10}, (_, i) => i);
+  // Fisher-Yates洗牌算法
+  for (let i = courtOrder.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [courtOrder[i], courtOrder[j]] = [courtOrder[j], courtOrder[i]];
+  }
+  for (let i = 0; i < courtOrder.length; i++) {
     // 选择结束
-    if (key.length ==0) break;
+    if (key.length == 0) break;
     await page.evaluate((i) => {
       // 切换场地
       document.querySelectorAll('.left_venues dd')[i].click();
       console.log("羽毛球", i + 1, "已选择！");
-    }, i);
+    }, courtOrder[i]);
     // 等待有更新的可选元素
     try {
       await page.waitForSelector('.can_active', { timeout: 200 });
@@ -100,7 +108,7 @@ async function main() {
     }
     // 获取更新后元素
     key = await page.evaluate((key) => {
-      const clickTimeDivs = document.querySelectorAll('.item_content_box.can_active');
+      const clickTimeDivs = document.querySelectorAll('.item_content_box.green.can_active');
       if(!clickTimeDivs) return key;
       if(key.length === 1) {
         clickTimeDivs.forEach((node) => {
@@ -126,7 +134,8 @@ async function main() {
               key.slice(0, -1);
               console.log("选择时间段2成功！");
               break;
-          }})
+          }
+        })
       }
       return key;
     }, key);
@@ -136,9 +145,9 @@ async function main() {
   console.log("预约已提交！");
 
   // 关闭浏览器
-  await browser.close();
+  // await browser.close();
 }
-// 定时运行
+
 cron.schedule('0 8 * * *', () => {
   console.log('定时任务启动，开始执行预约...');
   main().catch(err => {
